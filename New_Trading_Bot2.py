@@ -247,31 +247,30 @@ while True:
             set_leverage(SYMBOL_OKX, LEVERAGE, MARGIN_MODE)
             side = "buy" if long_signal else "sell"
             place_market_order(SYMBOL_OKX, side, usdt)
+            print(f'Order placed at side: {side}')
 
-            # wait for fill
-            wait_start = time.time()
             while True:
                 pos = okx.fetch_positions([SYMBOL_OKX])
-                if pos:
+                if len(pos)>0:
                     pos = pos[0]
                     entry_price = float(pos["avgPx"])
                     size = float(pos["contracts"])
+
+                    # Stop-loss
+                    sl_price = entry_price * (1 - STOP_LOSS_PCT / LEVERAGE) if long_signal else entry_price * (1 + STOP_LOSS_PCT / LEVERAGE)
+                    sl_side = "sell" if long_signal else "buy"
+                    sl = place_stop_loss(SYMBOL_OKX, sl_side, sl_price, size)
+                    stop_loss_id = sl["data"][0]["algoId"]
+
+                    position_open = True
+                    position_side = "long" if long_signal else "short"
+                    entry_time = datetime.now(timezone.utc)
+
+                    print(f'{entry_time}')
+                    print(f"Order Filled: Side={position_side.upper()} | Regime={predicted_regime} | Price={entry_price}")
                     break
-                if time.time() - wait_start > 10:
-                    raise TimeoutError("Position not filled in 10s")
-                time.sleep(0.5)
-
-            # Stop-loss
-            sl_price = entry_price * (1 - STOP_LOSS_PCT / LEVERAGE) if long_signal else entry_price * (1 + STOP_LOSS_PCT / LEVERAGE)
-            sl_side = "sell" if long_signal else "buy"
-            sl = place_stop_loss(SYMBOL_OKX, sl_side, sl_price, size)
-            stop_loss_id = sl["data"][0]["algoId"]
-
-            position_open = True
-            position_side = "long" if long_signal else "short"
-            entry_time = datetime.now(timezone.utc)
-
-            print(f"[ENTRY] {position_side.upper()} | Regime={predicted_regime} | Price={entry_price}")
+                else:
+                    print('Order not filled')
 
         # Exit after LENGTH_THRESHOLD bars
         if position_open:
