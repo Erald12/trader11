@@ -253,8 +253,8 @@ while True:
                 pos = okx.fetch_positions([SYMBOL_OKX])
                 if len(pos)>0:
                     pos = pos[0]
-                    entry_price = float(pos["avgPx"])
-                    size = float(pos["contracts"])
+                    entry_price = pos["avgPx"]
+                    size = pos["contracts"]
 
                     # Stop-loss
                     sl_price = entry_price * (1 - STOP_LOSS_PCT / LEVERAGE) if long_signal else entry_price * (1 + STOP_LOSS_PCT / LEVERAGE)
