@@ -63,15 +63,20 @@ int2regime = {0: "Bull", 1: "Bear", 2: "Bull_Long", 3: "Bear_Long"}
 # ============================
 # OKX CONNECTION
 # ============================
+
+api = ''
+sec = ''
+passwd = ''
+
 okx = ccxt.okx({
-    "apiKey": "",
-    "secret": "",
-    "password": "",
+    "apiKey": api,
+    "secret": sec,
+    "password": passwd,
     "enableRateLimit": True
 })
 
-tradeAPI = Trade.TradeAPI("api", "sec", "pass", False, "0")
-accountAPI = Account.AccountAPI("api", "sec", "pass", False, "0")
+tradeAPI = Trade.TradeAPI(api, sec, passwd, False, "0")
+accountAPI = Account.AccountAPI(api, sec, passwd, False, "0")
 
 # ============================
 # TRADING FUNCTIONS
@@ -252,22 +257,22 @@ while True:
             while True:
                 pos = okx.fetch_positions([SYMBOL_OKX])
                 if len(pos)>0:
-                    pos = pos[0]
-                    entry_price = pos["avgPx"]
-                    size = pos["contracts"]
+                    for position in pos:
+                        entry_price = position["avgPx"]
+                        size = position["contracts"]
 
-                    # Stop-loss
-                    sl_price = entry_price * (1 - STOP_LOSS_PCT / LEVERAGE) if long_signal else entry_price * (1 + STOP_LOSS_PCT / LEVERAGE)
-                    sl_side = "sell" if long_signal else "buy"
-                    sl = place_stop_loss(SYMBOL_OKX, sl_side, sl_price, size)
-                    stop_loss_id = sl["data"][0]["algoId"]
+                        # Stop-loss
+                        sl_price = entry_price * (1 - STOP_LOSS_PCT / LEVERAGE) if long_signal else entry_price * (1 + STOP_LOSS_PCT / LEVERAGE)
+                        sl_side = "sell" if long_signal else "buy"
+                        sl = place_stop_loss(SYMBOL_OKX, sl_side, sl_price, size)
+                        stop_loss_id = sl["data"][0]["algoId"]
 
-                    position_open = True
-                    position_side = "long" if long_signal else "short"
-                    entry_time = datetime.now(timezone.utc)
+                        position_open = True
+                        position_side = "long" if long_signal else "short"
+                        entry_time = datetime.now(timezone.utc)
 
-                    print(f'{entry_time}')
-                    print(f"Order Filled: Side={position_side.upper()} | Regime={predicted_regime} | Price={entry_price}")
+                        print(f'{entry_time}')
+                        print(f"Order Filled: Side={position_side.upper()} | Regime={predicted_regime} | Price={entry_price}")
                     break
                 else:
                     print('Order not filled')
