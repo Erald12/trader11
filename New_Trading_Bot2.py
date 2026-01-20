@@ -229,6 +229,7 @@ while True:
 
         # Features
         feats = compute_features(df)
+        df = df.iloc[1:].copy()  # Align with feats
 
         # Prepare current timestep features (using -3 for fully closed bar)
         x_t = torch.tensor(
