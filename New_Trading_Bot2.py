@@ -131,22 +131,35 @@ def compute_features(df):
 # ============================
 # REGIME LABELING
 # ============================
-def compute_regime_labels(df):
+def compute_regime_labels_with_age(df, length_threshold):
     regimes = np.where(df["SMA4"] > df["SMA6"], "Bull", "Bear")
     labeled = regimes.copy()
 
+    # Add _Long label
     start = 0
     while start < len(regimes):
         cur = regimes[start]
         end = start
         while end + 1 < len(regimes) and regimes[end + 1] == cur:
             end += 1
-
-        if (end - start + 1) >= LENGTH_THRESHOLD:
+        if (end - start + 1) >= length_threshold:
             labeled[start:end + 1] = f"{cur}_Long"
         start = end + 1
 
     df["regime_labeled"] = labeled
+
+    # Compute age
+    age = 1
+    prev_state = None
+    ages = np.zeros(len(labeled), dtype=np.float32)
+    for i, r in enumerate(labeled):
+        if prev_state == r:
+            age += 1
+        else:
+            age = 1
+            prev_state = r
+        ages[i] = np.log1p(age)
+    df["regime_age"] = ages
     return df
 
 # ============================
@@ -212,24 +225,14 @@ while True:
         df.dropna(inplace=True)
 
         # Regime labeling
-        df = compute_regime_labels(df)
+        df = compute_regime_labels_with_age(df, LENGTH_THRESHOLD)
 
-        # Features and age
+        # Features
         feats = compute_features(df)
-        ages = np.zeros(len(df), dtype=np.float32)
-        age = 1
-        prev_state = None
-        for i, r in enumerate(df["regime_labeled"]):
-            if prev_state == r:
-                age += 1
-            else:
-                age = 1
-                prev_state = r
-            ages[i] = np.log1p(age)
 
-        # Prepare current timestep features
+        # Prepare current timestep features (using -3 for fully closed bar)
         x_t = torch.tensor(
-            np.hstack([ages[-3], feats[-3]]),
+            np.hstack([df["regime_age"].iloc[-3], feats[-3]]),
             dtype=torch.float32
         ).unsqueeze(0)
 
