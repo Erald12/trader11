@@ -20,7 +20,7 @@ INTERVAL_SECONDS = 1800  # 30 min
 LEVERAGE = 15
 STOP_LOSS_PCT = 0.03
 MARGIN_MODE = "isolated"
-LENGTH_THRESHOLD = 22  # 11 hours in 30-min bars
+LENGTH_THRESHOLD = 11  # 11
 DEVICE = "cpu"
 
 
@@ -173,6 +173,18 @@ def wait_until_next_30min_bar():
     print(f"[SYNC] Sleeping {sleep_sec:.1f}s until next 30-min candle...")
     time.sleep(sleep_sec)
 
+def remaining_time_in_30_min():
+    now = datetime.now(timezone.utc)
+
+    # Determine next 30-min mark
+    if now.minute < 30:
+        next_bar = now.replace(minute=30, second=0, microsecond=0)
+    else:
+        next_bar = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+
+    remaining_time = (next_bar - now).total_seconds()
+    return  remaining_time
+
 # ============================
 # MAIN LOOP
 # ============================
@@ -217,7 +229,7 @@ while True:
 
         # Prepare current timestep features
         x_t = torch.tensor(
-            np.hstack([ages[-2], feats[-2]]),
+            np.hstack([ages[-3], feats[-3]]),
             dtype=torch.float32
         ).unsqueeze(0)
 
@@ -235,13 +247,13 @@ while True:
         # Entry signals (SMA crossover)
         long_signal = (
             predicted_regime == "Bull_Long"
-            and df["SMA4"].iloc[-2] <= df["SMA6"].iloc[-2]
-            and df["SMA4"].iloc[-1] > df["SMA6"].iloc[-1]
+            and df["SMA4"].iloc[-3] <= df["SMA6"].iloc[-3]
+            and df["SMA4"].iloc[-2] > df["SMA6"].iloc[-2]
         )
         short_signal = (
             predicted_regime == "Bear_Long"
-            and df["SMA4"].iloc[-2] >= df["SMA6"].iloc[-2]
-            and df["SMA4"].iloc[-1] < df["SMA6"].iloc[-1]
+            and df["SMA4"].iloc[-3] >= df["SMA6"].iloc[-3]
+            and df["SMA4"].iloc[-2] < df["SMA6"].iloc[-2]
         )
 
         # Entry
@@ -251,11 +263,17 @@ while True:
 
             set_leverage(SYMBOL_OKX, LEVERAGE, MARGIN_MODE)
             side = "buy" if long_signal else "sell"
-            place_market_order(SYMBOL_OKX, side, usdt)
+            place_order = place_market_order(SYMBOL_OKX, side, usdt)
             print(f'Order placed at side: {side}')
+            place_order_id = place_order["data"][0]["algoId"]
 
             while True:
                 pos = okx.fetch_positions([SYMBOL_OKX])
+                re =remaining_time_in_30_min()
+                if len(pos)==0 and re<10:
+                    tradeAPI.cancel_algo_order([{"instId": SYMBOL_OKX, "algoId": place_order_id}])
+                    break
+
                 if len(pos)>0:
                     for position in pos:
                         entry_price = position["avgPx"]
